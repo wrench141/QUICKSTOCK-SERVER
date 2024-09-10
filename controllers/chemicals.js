@@ -47,37 +47,45 @@ const preRecordData = async(req, res) => {
         let chemicals = [];
         let i=1;
         
-        xlsx(path.join(__dirname, "../utils/chemicals.xlsx")).then(async(rows) => {
-            for (const row of rows) {
-                let chemCode = row[1].toString().replace(/[0-9,.\s-]/g, '').slice(0, 3).toUpperCase() + i;
-                const existChemical = await Chemical.findOne({ name: row[1].toLowerCase() });
-                if (!existChemical) {
-                    const chemicalMap = new Map(chemicals.map((chemical) => [chemical.name, chemical]))
-                    if(!chemicalMap.has(row[1].toLowerCase())){
-                        chemicals.push({
-                            name: row[1].toLowerCase(),
-                            expiresAt: new Date(), 
-                            manufacturedDate: new Date(),
-                            quantity: row[2] == null ? "null" : row[2],
-                            place: body.place,
-                            chemicalCode: chemCode
-                        });
-                    }else{
-                        console.log("redundant", row[1])
+        console.log(req.file)
+        const filePath = `${__dirname}/../${req.file.path}`
+        xlsx(filePath).then(async(rows) => {
+            try {
+                for (const row of rows) {
+                    let chemCode = row[1].toString().replace(/[0-9,.\s-]/g, '').slice(0, 3).toUpperCase() + i;
+                    const existChemical = await Chemical.findOne({ name: row[1].toLowerCase() });
+                    if (!existChemical) {
+                        const chemicalMap = new Map(chemicals.map((chemical) => [chemical.name, chemical]))
+                        if(!chemicalMap.has(row[1].toLowerCase())){
+                            chemicals.push({
+                                name: row[1].toLowerCase(),
+                                expiresAt: new Date(row[3]), 
+                                manufacturedDate: new Date(row[4]),
+                                quantity: row[2] == null ? "null" : row[2],
+                                place: body.place,
+                                chemicalCode: chemCode,
+                                id: chemicals.length+1
+                            });
+                        }else{
+                            console.log("redundant", row[1])
+                        }
+                    } else {
+                        console.log("exists");
                     }
-                } else {
-                    console.log("exists");
-                }
-                i++
-            };
-            let respChemicals = (await Chemical.insertMany(chemicals)).map((chem) => {return {stockType: "chemical", stockid: chem._id}});
-
-            await Store.findOneAndUpdate({storeIncharge: req.body.uid}, {
-                stock: respChemicals
-            });
-
-            console.log(respChemicals)
-            res.status(200).json({data: `${chemicals.length} chemicals added`})
+                    i++
+                };
+                let respChemicals = (await Chemical.insertMany(chemicals)).map((chem) => {return {stockType: "chemical", stockid: chem._id}});
+    
+                await Store.findOneAndUpdate({storeIncharge: req.body.uid}, {
+                    stock: respChemicals
+                });
+    
+                console.log(respChemicals)
+                res.status(200).json({data: `${chemicals.length} chemicals added`})
+            } catch (error) {
+                console.log(error);
+                res.status(400).json({data: "Format error, invalid excel columns"})
+            }
         });
             
     } catch (error) {
@@ -89,11 +97,16 @@ const preRecordData = async(req, res) => {
 const getAllChemicals = async(req, res) => {
     try {
         const chemicals = await Chemical.find();
-        if(chemicals.length > 0){
-            res.status(200).json(({data: chemicals}));
-        }else{
-            res.status(200).json({data: "no chemical records found"});
+        if (chemicals.length > 0) {
+            res.status(200).json({
+                data: chemicals.sort((a, b) => {
+                return new Date(a.expiresAt) - new Date(b.expiresAt);
+                })
+            });
+        } else {
+            res.status(200).json({ data: [] });
         }
+
     } catch (error) {
         console.log(error);
         res.status(500).json({data: "server error"})

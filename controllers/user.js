@@ -44,6 +44,13 @@ const login = async(req, res) => {
 }
 
 const getAllUsers = async(req, res) => {
-    res.status(200).json({data: await User.find()})}
+    try {
+        const users = await User.find().select('-password -role');
+        res.status(200).json({data: users})
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({data: "server error"})
+    }
+}
 
 module.exports = {register, login, getAllUsers}

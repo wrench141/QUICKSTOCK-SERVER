@@ -6,6 +6,7 @@ const roleAuth = (roles) => {
     return async function(req, res, next){
         try {
             const eid = jwt.decode(req.headers.token, process.env.SALT);
+            console.log(eid)
             if(eid){
                 const user = await User.findOne({employeeId: eid});
                 if(user){

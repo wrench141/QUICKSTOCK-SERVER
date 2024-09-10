@@ -3,16 +3,16 @@ const Lab = require("../models/labs");
 
 const createLab = async(req, res) => {
     try {
-        const {name, roomNo, chemicals, uid} = req.body;
+        const {name, roomNo, chemicals, inChargeId} = req.body;
         const existLab = await Lab.findOne({$and: [{name}, {roomNo}]});
         if(existLab){
             res.status(400).json({data: "lab already exists"})
         }else{
             const newLab = new Lab({
-                name, roomNo, chemicals, inChargeId: uid
+                name, roomNo, chemicals, inChargeId
             });
             await newLab.save();
-            res.status(200).json({data: `${name} lab created`})
+            res.status(200).json({data: `${name} lab created, ${chemicals.length} chemicals added!`})
         }
         console.log(existLab)
         
@@ -59,5 +59,21 @@ const stockUsage = async(req, res) => {
     }
 }
 
+const getLabs = async (req, res) => {
+    try {
+      const labs = await Lab.find();
+      const finalLabs = await Promise.all(labs.map(async (lab) => {
+        const chemicals = await Promise.all(lab.chemicals.map(async (chemicalId) => {
+          const chemical = await Chemical.findById(chemicalId.chemicalId);
+          return chemical;
+        }));
+        return { ...lab._doc, chemicals };
+      }));
+      res.status(200).json({ data: finalLabs });
+    } catch (error) {
+      console.log(error);
+      res.status(500).json({ data: "server error" });
+    }
+  };
 
-module.exports = {createLab, assignIncharge};
+module.exports = {createLab, assignIncharge, getLabs};
