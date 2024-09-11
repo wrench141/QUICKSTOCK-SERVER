@@ -1,18 +1,20 @@
+const Lab = require("../models/labs");
 const User = require("../models/user");
 const bcrypt = require("bcryptjs")
 
 const register = async(req, res) => {
     try {
-        const {eid, email, password} = req.body;
+        const {eid, username, email, password} = req.body;
         const extUser = await User.findOne({employeeId: eid});
         if(extUser){
             res.status(400).json({data: "User already exists"})
         }else{
             const newUser = new User({
-                employeeId: eid, email, password
+                employeeId: eid, username, email, password
             });
             await newUser.save();
-            res.status(200).json({data: "account created"})
+            const token = newUser.genToken()
+            res.status(200).json({data: "account created", token})
         }
         console.log(eid, password)
     } catch (error) {
@@ -23,14 +25,22 @@ const register = async(req, res) => {
 
 const login = async(req, res) => {
     try {
-        const {eid, password} = req.body;
-        const extUser = await User.findOne({employeeId: eid});
+        const {username, password} = req.body;
+        const extUser = await User.findOne({username});
         if(extUser){
             console.log(extUser)
             const status = bcrypt.compare(password, extUser.password);
             if(status){
+                console.log(extUser)
                 const token = extUser.genToken();
-                res.status(200).json({data: "login success", token})
+                if(extUser.role == "admin" || extUser.role == "store manager"){
+                    res.status(200).json({data: "login success", token, redirect: "/store"})
+                }else if(extUser.role == "lab incharge"){
+                    const lab = await Lab.findOne({inChargeId: extUser.employeeId})
+                    res.status(200).json({data: "login success", token, redirect: `/lab/${lab._id}`})
+                }else{
+                    res.status(200).json({data: "login success", token, redirect: "/forbidden"})
+                }
             }else{
                 res.status(403).json({data: "invalid credintials"})
             }
