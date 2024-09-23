@@ -1,4 +1,5 @@
 const Chemical = require("../models/chemicals");
+const Experiment = require("../models/experiment");
 const Lab = require("../models/labs");
 const User = require("../models/user");
 
@@ -18,7 +19,6 @@ const createLab = async (req, res) => {
             await newLab.save();
             res.status(200).json({ data: `${name} lab created, ${chemicals.length} chemicals added!` })
         }
-        console.log(existLab)
 
     } catch (error) {
         console.log(error);
@@ -43,25 +43,29 @@ const assignIncharge = async (req, res) => {
 //stock updations
 const stockUsage = async (req, res) => {
     try {
-        const { id } = req.params.id;
-        const { chemicals } = req.body;
-
-        if (chemicals.length > 0) {
-            chemicals.map(async (chemical) => {
-                const existChemical = await Chemical.findById(chemical.id);
-                if (existChemical) {
-                    //use the reference logic from the notion stock usage section
+        const id = req.params.id;
+        const { data } = req.body;
+        
+        const extLab = await Lab.findById(id);
+        await Promise.all(
+            extLab.chemicals.map((chemical) => {
+                const match = data.chemicals.find(obj => obj.id == chemical.chemicalId)
+                if(match){
+                    chemical.quantity = parseInt(chemical.quantity) - parseInt(match.quantity);
                 }
             })
-        } else {
-            res.status(400).json({ data: "No chemicals list sent" })
-        }
+        );
+        
+        const newExperiment = new Experiment(data);
 
+        await newExperiment.save();
+        await extLab.save();
+        res.status(200).json({data: "record saved"})
     } catch (error) {
         console.log(error)
         res.status(500).json({ data: "server error" })
     }
-}
+} 
 
 const getLabs = async (req, res) => {
     try {
@@ -85,7 +89,11 @@ const getLab = async(req, res) => {
         const id = req.params.id;
         const lab = await Lab.findById(id);
         if(lab){
-            res.status(200).json({ data: lab })
+            const chemicals = await Promise.all(
+                lab.chemicals.map(chemical => Chemical.findById(chemical.chemicalId))
+            );
+            lab.chemicals = chemicals;
+            res.status(200).json({ data: lab, chemicals })
         }else{
             res.status(404).json({ data: "Oops! Lab not found" });
         }
@@ -93,6 +101,31 @@ const getLab = async(req, res) => {
         console.log(error);
         res.status(500).json({ data: "server error" });
     }
+};
+
+
+//experiments
+const getExperiments = async(req, res) => {
+    try {
+        const {id} = req.params;
+        const experiments = await Experiment.find({labId: id});
+        const lab = await Lab.findById(id);
+        res.status(200).json({data: experiments.length > 0 ? experiments : [], username: req.body.username, lab: lab?.name})     
+    } catch (error) {
+        console.log(error)
+        res.status(500).json({ data: "server error" });
+    }
 }
 
-module.exports = { createLab, assignIncharge, getLabs, getLab };
+const getExperiment = async(req, res) => {
+    try {
+        const {id} = req.params;
+        const experiment = await Experiment.findById(id);
+        res.status(200).json({data: experiment})
+    } catch (error) {
+        console.log(error)
+        res.status(500).json({ data: "server error" });
+    }
+}
+
+module.exports = { createLab, assignIncharge, getLabs, getLab, stockUsage, getExperiments, getExperiment };
